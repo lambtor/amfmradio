@@ -1,6 +1,7 @@
 import time
 import board
 import digitalio
+import pwmaudioio
 from ltp305 import ltp305
 
 # timeout is in seconds
@@ -19,15 +20,15 @@ moMatrix.brightness(48)
 # moMatrix.update()
 # moMatrix.setDecimal(True, False)
 
-while False:    
+while False:
     if ((time.monotonic() - mnLastPoll) > TIMEOUT):
         lstVal = [int(a) for a in str(mnDispVal)]
         if (len(lstVal) == 1):
-           moMatrix.writeChar("r", lstVal[0], mbRightDec)
-           moMatrix.writeChar("l", 0, mbRightDec)
+            moMatrix.writeChar("r", lstVal[0], mbRightDec)
+            moMatrix.writeChar("l", 0, mbRightDec)
         else:
-           moMatrix.writeChar("r", lstVal[1], mbRightDec)
-           moMatrix.writeChar("l", lstVal[0], mbLeftDec)
+            moMatrix.writeChar("r", lstVal[1], mbRightDec)
+            moMatrix.writeChar("l", lstVal[0], mbLeftDec)
         # moMatrix.brightness(mnBrightness)
         mbLeftDec = not mbLeftDec
         mbRightDec = not mbRightDec
@@ -36,5 +37,5 @@ while False:
         mnDispVal += 1
         if (mnDispVal > 99):
             mnDispVal = 0
-             
-        
+
+

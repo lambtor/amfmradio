@@ -13,10 +13,11 @@ tinynumbers = [
     [0b11100, 0b11111]
 ]
 
-# character map
+# character map - this is how you define a dictionary in python
 font = {
     "a": [0, 0, 13, 19, 17, 19, 13],
     "w": [],
+    " ": [0, 0, 0, 0, 0, 0, 0]
     "0": [14, 17, 19, 21, 25, 17, 14],
     "1": [4, 12, 4, 4, 4, 4, 14],
     "2": [14, 17, 1, 14, 16, 16, 31],

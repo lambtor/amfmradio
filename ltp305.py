@@ -4,7 +4,7 @@ import busio
 # Somewhat based on: https://github.com/pimoroni/ltp305-python
 class ltp305:
     # need list of character maps
-    CHARMAP
+    # CHARMAP
     def commands(self):
         self.MODE = 0b00011000
         self.OPTS = 0b00001110
@@ -60,9 +60,9 @@ class ltp305:
         self.sendCommand(self.CMD_UPDATE, 0x01)
 
     def brightness(self, value=127):
-        value = int(value)
-        if value > 127:
-            value = 127
+        value = min(int(value), 127)
+        # if value > 127:
+            # value = 127
         self.sendCommand(self.CMD_BRIGHTNESS, value)
 
     def clear(self):
@@ -97,14 +97,12 @@ class ltp305:
     def writeLeft(self, map, bDecimal):
         map = self.rowsToCols(map)
         c = 0
-
         rows = range(14, 19)
 
         for row in rows:
             self.sendCommand(row, map[c])
-            # print("row " + str(row) + "|" + str(map[c]))
             c += 1
-            
+
         # on left side, send row as 21, with full definition as if number must be binary 128
         if (bDecimal):
             self.sendCommand(21, 0b01000000)
@@ -123,15 +121,17 @@ class ltp305:
             for char in rval:
                 t = temp
                 temp = char + t
-            temp = "0b" + temp            
+            temp = "0b" + temp
             temp = int(temp)
             if (col == 7):
+                # decimal must be treated as if there are 3 extra columns
+                # on right matrix. on left it's 3 extra rows
+                # leftmost column if we add 3 is 128 in binary
                 if (bDecimal == True):
                     temp += 128
 
             self.sendCommand(col, temp)
-            # print("col " + str(col) + "|" + str(temp))
-            c += 1            
+            c += 1
 
     def write(self, disp, map, bDecimal):
         disp = disp.lower()
@@ -146,5 +146,5 @@ class ltp305:
 
     def writeCharPair(self, lChar, rChar, bDecimal):
         self.writeChar("l", lChar, bDecimal)
-        self.writeChar("r", rChar, bDecimal)   
-    
+        self.writeChar("r", rChar, bDecimal)
+
