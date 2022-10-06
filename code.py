@@ -19,7 +19,7 @@ moMatrix.brightness(48)
 # moMatrix.writeChar("r", "b", False)
 # moMatrix.update()
 # moMatrix.setDecimal(True, False)
-msTestString = " siCBkening Ass jizz `~\"n shaqu "
+msTestString = " It's FIDGET TIME dawg (cat)! "
 mnScrollIndex = 0
 
 while True:
