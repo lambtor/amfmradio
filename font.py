@@ -14,7 +14,7 @@ tinynumbers = [
 ]
 
 # character map - this is how you define a dictionary in python
-font = {
+fontDictionary = {
     " ": [0, 0, 0, 0, 0, 0, 0],
     # "a": [0, 0, 13, 19, 17, 19, 13],
     "a": [0, 0, 14, 1, 15, 17, 15],

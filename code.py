@@ -1,11 +1,11 @@
 import time
 import board
 import digitalio
-import pwmaudioio
+# import pwmaudioio
 from ltp305 import ltp305
 
 # timeout is in seconds
-TIMEOUT = 0.015
+TIMEOUT = 0.25
 mnLastPoll = 0
 mnBrightness = 0
 mnDispVal = 0
@@ -15,13 +15,24 @@ mbLeftDec = False
 moMatrix = ltp305(sda=board.GP16, scl=board.GP17, i2cAddress=0x61)
 moMatrix.clear()
 moMatrix.brightness(48)
-# moMatrix.writeChar("l", 4, True)
-# moMatrix.writeChar("r", 1, True)
+# moMatrix.writeChar("l", "a", True)
+# moMatrix.writeChar("r", "b", False)
 # moMatrix.update()
 # moMatrix.setDecimal(True, False)
+msTestString = " siCBkening Ass jizz `~\"n shaqu "
+mnScrollIndex = 0
 
-while False:
+while True:
     if ((time.monotonic() - mnLastPoll) > TIMEOUT):
+        # scroll string
+        mnLastPoll = time.monotonic()
+        moMatrix.writeSubstring([char1 for char1 in msTestString], mnScrollIndex)
+        moMatrix.update()
+        mnScrollIndex += 1
+        
+        if (mnScrollIndex >= (len(msTestString) + 1)):
+            mnScrollIndex = 0
+        """
         lstVal = [int(a) for a in str(mnDispVal)]
         if (len(lstVal) == 1):
             moMatrix.writeChar("r", lstVal[0], mbRightDec)
@@ -37,5 +48,5 @@ while False:
         mnDispVal += 1
         if (mnDispVal > 99):
             mnDispVal = 0
-
+        """
 
