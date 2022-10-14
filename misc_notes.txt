@@ -1,0 +1,48 @@
+
+need to pull RST pin low, then high before it'll appear on i2c scan for some fuckin reason.
+need to pull and PWM pin low, then high as part of initialization
+
+likely need to use
+	i2c.writeto(i2cAddress, array of bytes)
+all interactions with this board use a byte buffer, then translate shit into something the chip can use.  don't program to the chip, program to the goddamn board.
+it looks like all i2c interactions are done with board interpolating incoming byte arrays in expected structures.
+
+//INIT------------------------------
+
+//command_and_arguments_buffer[ 0 ] = AMFM_CMD_PWRUP;
+//command_and_arguments_buffer[ 1 ] = AMFM_PWRUP_ARG1_CTSIEN | AMFM_PWRUP_ARG1_GPO2OEN | AMFM_PWRUP_ARG1_XOSCEN | AMFM_PWRUP_ARG1_FUNC_FMRECEIVE;
+//command_and_arguments_buffer[ 2 ] = AMFM_PWRUP_ARG2_OPMODE_ANALOGOUT;
+
+command_and_arguments_buffer[ 0 ] = 0x01
+command_and_arguments_buffer[ 1 ] = 0x80 | 0x40 | 0x10 | 0x00
+command_and_arguments_buffer[ 2 ] = 0x05
+
+// SET VOLUME ----------------------
+
+command_and_arguments_buffer[ 0 ] = 0x12		//AMFM_CMD_SETPROP;
+command_and_arguments_buffer[ 1 ] = 0x00
+command_and_arguments_buffer[ 2 ] = 0x40		//AMFM_PROP_RXVOLUME_H; MAX volume level
+command_and_arguments_buffer[ 3 ] = 0x00		//AMFM_PROP_RXVOLUME_L; MIN volume level
+command_and_arguments_buffer[ 4 ] = 0x00
+command_and_arguments_buffer[ 5 ] = 60			//volume (0-63)? this is probably supposed to be 0x00 to 0x40. there might be logic inside the chip to cap it at 0x40 when you specify larger value than max here
+
+// SET STATION ---------------------
+//all stations are using khz. probably want to have displays mimic this?
+//ex: 670a -> 0.67? 100.3f -> 100.3?  am would be anything from 0.52 to 1.7 instead of 520 to 1700
+//full khz range for am and FM is 535 to 108000
+
+command_and_arguments_buffer[ 0 ] = 0x20									//AMFM_CMD_FMTUNEFREQ;
+command_and_arguments_buffer[ 1 ] = 0x00
+command_and_arguments_buffer[ 2 ] = frequency.to_bytes(2, 'big')[0]			// ( uint8_t )( frequency >> 8 );
+command_and_arguments_buffer[ 3 ] = frequency.to_bytes(2, 'big')[1]			// ( uint8_t )( frequency );
+command_and_arguments_buffer[ 4 ] = 0x00
+
+// MUTE ----------------------------
+// call this anytime we're in mp3 mode
+
+// UNMUTE --------------------------
+// call this anytime we're coming from mp3 mode
+
+// SHUTDOWN ------------------------
+// call this anytime we're going to mp3 mode? save power?
+// might not need a 3 way switch for am/fm/mp3 if driver already only uses one function regardless of 
