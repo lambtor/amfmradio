@@ -4,17 +4,15 @@ cannot run more than 2 pairs of matrices on pico 3v pin. these will overdraw cur
 
 am fm click notes:
 i2c address			0x11
-need all these pins for this to work as "2 wire" mode:
+all these pins are defined for this to work as "2 wire" mode:
 SCL
 SDA
-RST
-PWM
-SEN
+RST		need to pull RST pin low, then high before it'll appear on i2c scan for some fuckin reason.
+PWM		need to pull and PWM pin low, then high as part of initialization
+SEN		not required? this is for chip select?
 GP1		INPUT1 GPIO (for response messages?)
 GP2		INPUT2 GPIO
-
-need to pull RST pin low, then high before it'll appear on i2c scan for some fuckin reason.
-need to pull and PWM pin low, then high as part of initialization
+	
 
 likely need to use
 	i2c.writeto(i2cAddress, array of bytes)
@@ -41,10 +39,11 @@ command_and_arguments_buffer[ 4 ] = 0x00
 command_and_arguments_buffer[ 5 ] = 60			//volume (0-63)? this is probably supposed to be 0x00 to 0x40. there might be logic inside the chip to cap it at 0x40 when you specify larger value than max here
 
 // SET STATION ---------------------
-//all stations are using khz. probably want to have displays mimic this?
+//all station change function calls are using khz. 
+//maybe have display show AM and FM both as MHZ?
 //ex: 670a -> 0.67? 100.3f -> 100.3?  am would be anything from 0.52 to 1.7 instead of 520 to 1700
 //full khz range for am and FM is 535 to 108000
-
+//need to test if the freq value is decimal converted to bytes 
 command_and_arguments_buffer[ 0 ] = 0x20									//AMFM_CMD_FMTUNEFREQ;
 command_and_arguments_buffer[ 1 ] = 0x00
 command_and_arguments_buffer[ 2 ] = frequency.to_bytes(2, 'big')[0]			// ( uint8_t )( frequency >> 8 );
@@ -52,11 +51,25 @@ command_and_arguments_buffer[ 3 ] = frequency.to_bytes(2, 'big')[1]			// ( uint8
 command_and_arguments_buffer[ 4 ] = 0x00
 
 // MUTE ----------------------------
-// call this anytime we're in mp3 mode
+// call this anytime we're going to mp3 mode?
+command_and_arguments_buffer[ 0 ] = 0x12			//AMFM_CMD_SETPROP
+command_and_arguments_buffer[ 1 ] = 0x00
+command_and_arguments_buffer[ 2 ] = 0x40			//AMFM_PROP_RXHMUTE_H;
+command_and_arguments_buffer[ 3 ] = 0x01			//AMFM_PROP_RXHMUTE_L;
+command_and_arguments_buffer[ 4 ] = 0x00
+command_and_arguments_buffer[ 5 ] = 0x02 | 0x01		//AMFM_PROPVALL_LMUTE | AMFM_PROPVALL_RMUTE;
 
 // UNMUTE --------------------------
 // call this anytime we're coming from mp3 mode
+command_and_arguments_buffer[ 0 ] = 0x12			//AMFM_CMD_SETPROP
+command_and_arguments_buffer[ 1 ] = 0x00;
+command_and_arguments_buffer[ 2 ] = 0x40			//AMFM_PROP_RXHMUTE_H;
+command_and_arguments_buffer[ 3 ] = 0x01			//AMFM_PROP_RXHMUTE_L;
+command_and_arguments_buffer[ 4 ] = 0x00;
+command_and_arguments_buffer[ 5 ] = 0x00;
 
 // SHUTDOWN ------------------------
 // call this anytime we're going to mp3 mode? save power?
-// might not need a 3 way switch for am/fm/mp3 if driver already only uses one function regardless of 
+// might not need a 3 way switch for am/fm/mp3 if driver already only uses one function for all of radio ranges
+// DPDT for "radio" and "mp3"
+flip reset pin?
