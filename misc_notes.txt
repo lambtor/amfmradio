@@ -1,3 +1,17 @@
+ltp305 matrix notes:
+cannot run more than 2 pairs of matrices on pico 3v pin. these will overdraw current and behavior will get glitchy even if brightness on 2 pairs is set above ~80/127?
+	-need a booster board for consistent 5v to feed to these
+
+am fm click notes:
+i2c address			0x11
+need all these pins for this to work as "2 wire" mode:
+SCL
+SDA
+RST
+PWM
+SEN
+GP1		INPUT1 GPIO (for response messages?)
+GP2		INPUT2 GPIO
 
 need to pull RST pin low, then high before it'll appear on i2c scan for some fuckin reason.
 need to pull and PWM pin low, then high as part of initialization
