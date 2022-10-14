@@ -8,8 +8,10 @@ REGISTERS = (0, 256)  # Range of registers to read, from the first up to (but
 
 REGISTER_SIZE = 2     # Number of bytes to read from each register.
 
-#try the score
-nTestkHz = 670
+#try the q101
+# mhz station values need to be multiplied by 1000 to convert to khz used by board
+#am needs an antenna
+nTestkHz = 101100
 
 oRstPin = digitalio.DigitalInOut(board.GP27)
 oRstPin.direction = digitalio.Direction.OUTPUT
@@ -17,6 +19,7 @@ oRstPin.direction = digitalio.Direction.OUTPUT
 oPWMPin = digitalio.DigitalInOut(board.GP26)
 oPWMPin.direction = digitalio.Direction.OUTPUT
 oPWMPin.value = False
+# this enables serial input, setting this pin low
 oSenPin = digitalio.DigitalInOut(board.GP25)
 oSenPin.direction = digitalio.Direction.OUTPUT
 oSenPin.value = False
