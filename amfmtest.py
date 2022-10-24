@@ -6,7 +6,7 @@ import time
 # try the q101
 # mhz station values need to be multiplied by 1000 to convert to khz used by board
 # am needs an antenna
-nTestkHz = 10110
+nTestkHz = 9310
 
 oRstPin = digitalio.DigitalInOut(board.GP27)
 oRstPin.direction = digitalio.Direction.OUTPUT
@@ -41,13 +41,10 @@ def amfm_reset():
 
 def fmStartup():
     global i2c
-    # initCmdBuffer = [0x00, 0x00, 0x00]
     # power up
-    # initCmdBuffer[0] = 0x01
-    # initCmdBuffer[1] = 0x80 | 0x40 | 0x10 | 0x00
-    # initCmdBuffer[2] = 0x05
     initCmdBuffer = [0x01, (0x80 | 0x40 | 0x10 | 0x00), 0x05]
     i2c.writeto(0x11, bytearray(initCmdBuffer))
+    time.sleep(0.2)
     # FM hardware cfg
     amfmSetProperty(0x0001, (0x0001 | 0x0004))
     # general cfg
@@ -59,6 +56,7 @@ def fmStartup():
     amfmSetProperty(0x1100, 0x2)
     # seek step 100khz
     amfmSetProperty(0x1402, 0x2)
+    time.sleep(1.0)
 
 def amfmSetVolume(nVolume):
     if (nVolume < 0):
@@ -82,8 +80,8 @@ def amfmSetVolume(nVolume):
 def fmSetFrequency(nKhz):
     global i2c
     nKhzBytes = nKhz.to_bytes(2, 'big')
-    arrFreqBuffer = [0x20, 0x00, nKhzBytes[0], nKhzBytes[1], 0x00]
-    i2c.writeto(0x11, bytearray(arrFreqBuffer))
+    arrFreqBuffer = bytearray([0x20, 0x00, nKhzBytes[0], nKhzBytes[1], 0x00])
+    i2c.writeto(0x11, arrFreqBuffer)
 
 def amfmMute():
     global i2c
@@ -108,10 +106,10 @@ def amfmSetProperty(oPropID, oPropVal):
 
 try:
     fmStartup()
+    # unmute
     amfmSetProperty(0x4001, 0)
-    amfmSetVolume(40)
-    fmSetFrequency(nTestkHz)
-    
+    amfmSetVolume(63)
+    fmSetFrequency(nTestkHz)    
     while (True):
         pass
 finally:
