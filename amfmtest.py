@@ -3,15 +3,10 @@ import busio
 import digitalio
 import time
 
-REGISTERS = (0, 256)  # Range of registers to read, from the first up to (but
-                      # not including!) the second value.
-
-REGISTER_SIZE = 2     # Number of bytes to read from each register.
-
-#try the q101
+# try the q101
 # mhz station values need to be multiplied by 1000 to convert to khz used by board
-#am needs an antenna
-nTestkHz = 101100
+# am needs an antenna
+nTestkHz = 10110
 
 oRstPin = digitalio.DigitalInOut(board.GP27)
 oRstPin.direction = digitalio.Direction.OUTPUT
@@ -35,85 +30,90 @@ i2c = busio.I2C(scl=board.GP7, sda=board.GP6, frequency=100000)
 while not i2c.try_lock():
     pass
 
-obStartup = 0x40
-obStartup |= 0x00
 def amfm_reset():
     global oRstPin
     global oPWMPin
     oRstPin.value = False
     oPWMPin.value = False
-    time.sleep(0.2)
+    time.sleep(0.3)
     oRstPin.value = True
     oPWMPin.value = True
 
-def amfm_init():
+def fmStartup():
     global i2c
-    initCmdBuffer = [0x00, 0x00, 0x00]
-    initCmdBuffer[0] = 0x01
-    initCmdBuffer[1] = 0x80 | 0x40 | 0x10 | 0x00
-    initCmdBuffer[2] = 0x05
-    i2c.writeto(0x11, initCmdBuffer)
+    # initCmdBuffer = [0x00, 0x00, 0x00]
+    # power up
+    # initCmdBuffer[0] = 0x01
+    # initCmdBuffer[1] = 0x80 | 0x40 | 0x10 | 0x00
+    # initCmdBuffer[2] = 0x05
+    initCmdBuffer = [0x01, (0x80 | 0x40 | 0x10 | 0x00), 0x05]
+    i2c.writeto(0x11, bytearray(initCmdBuffer))
+    # FM hardware cfg
+    amfmSetProperty(0x0001, (0x0001 | 0x0004))
+    # general cfg
+    amfmSetProperty(0x1403, 3)
+    amfmSetProperty(0x1404, 20)
+    # regional USA
+    amfmSetProperty(0x1500, 0x0004)
+    amfmSetProperty(0x1502, (0x0001 | (3 << 14) | (3 << 12) | (3 << 10) |  (3 << 8)))    
+    amfmSetProperty(0x1100, 0x2)
+    # seek step 100khz
+    amfmSetProperty(0x1402, 0x2)
 
 def amfmSetVolume(nVolume):
     if (nVolume < 0):
         nVolume = 0
     if (nVolume > 63):
         nVolume = 63
+    byVol = (nVolume & 0x003F).to_bytes(2, 'big')
+    nVolID = int(0x4000)
+    byVolID = nVolID.to_bytes(2, 'big')
     global i2c
-    arrVolBuffer = [0x12, 0x00, 0x00, 0x00, 0x00, 0x00]
+    arrVolBuffer = bytearray([0x12, 0x00, 0x00, 0x00, 0x00, 0x00])
     # max volume value
-    arrVolBuffer[2] = 0x40
+    arrVolBuffer[2] = byVolID[0]
     # min volume value
-    arrVolBuffer[3] = 0x00
-    arrVolBuffer[5] = hex(nVolume)
+    arrVolBuffer[3] = byVolID[1]
+    arrVolBuffer[4] = byVol[0]
+    arrVolBuffer[5] = byVol[1]
     i2c.writeto(0x11, arrVolBuffer)
 
 # full range from am 520 to fm 108 is 520 -> 108000
-def amfmSetFrequency(nKhz):
+def fmSetFrequency(nKhz):
     global i2c
     nKhzBytes = nKhz.to_bytes(2, 'big')
     arrFreqBuffer = [0x20, 0x00, nKhzBytes[0], nKhzBytes[1], 0x00]
-    i2c.writeto(0x11, arrFreqBuffer)
+    i2c.writeto(0x11, bytearray(arrFreqBuffer))
 
 def amfmMute():
     global i2c
     arrMuteBuffer = [0x12, 0x00, 0x40, 0x01, 0x00, 0x00]
     arrMuteBuffer[5] = 0x02 | 0x01
-    i2c.writeto(0x11, arrMuteBuffer)
+    i2c.writeto(0x11, bytearray(arrMuteBuffer))
 
 def amfmUnMute():
     global i2c
     arrMuteBuffer = [0x12, 0x00, 0x40, 0x01, 0x00, 0x00]
-    i2c.writeto(0x11, arrMuteBuffer)
+    i2c.writeto(0x11, bytearray(arrMuteBuffer))
 
-# Find the first I2C device available.
-devices = i2c.scan()
-while len(devices) < 1:
-    devices = i2c.scan()
-device = devices[0]
-print('Found device with address: {}'.format(hex(device)))
-time.sleep(0.11)
-
+# time.sleep(0.11)
+def amfmSetProperty(oPropID, oPropVal):
+    global i2c
+    nPropID = int(oPropID)
+    byPropID = nPropID.to_bytes(2, 'big')
+    nPropVal = int(oPropVal)
+    byPropVal = nPropVal.to_bytes(2, 'big')
+    cmdBuffer = bytearray([0x12, 0x00, byPropID[0], byPropID[1], byPropVal[0], byPropVal[1]])
+    i2c.writeto(0x11, cmdBuffer)
 
 try:
-    for nDev in devices:
-        print("device at " + str(hex(nDev)) + " on bus")
-    # Scan all the registers and read their byte values.
-    result = bytearray(REGISTER_SIZE)
-    for register in range(*REGISTERS):
-        try:
-            if (register == 32):
-                nStation = int(0)
-                arrStationBytes = nStation.to_bytes(2, 'big')
-                print(arrStationBytes)
-                oTmpBytes = [0x20, 0x00, arrStationBytes[0], arrStationBytes[1], 0x00]
-                i2c.writeto(device, bytes(arrStationBytes))
-            else:
-                i2c.writeto(device, bytes([register]))
-            i2c.readfrom_into(device, result)
-        except OSError:
-            continue  # Ignore registers that don't exist!
-        print('Address {0}: {1}'.format(hex(register), ' '.join([hex(x) for x in result])) + " | " + str(register))
+    fmStartup()
+    amfmSetProperty(0x4001, 0)
+    amfmSetVolume(40)
+    fmSetFrequency(nTestkHz)
+    
+    while (True):
+        pass
 finally:
     # Unlock the I2C bus when finished.  Ideally put this in a try-finally!
     i2c.unlock()
