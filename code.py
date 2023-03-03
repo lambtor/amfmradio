@@ -4,6 +4,8 @@ import digitalio
 import rotaryio
 from ltp305 import ltp305
 from font import font
+from adafruit_bus_device.i2c_device import I2CDevice
+import tinkeringtech_rda5807m
 
 # timeout is in seconds
 TIMEOUT = 0.015
@@ -40,8 +42,18 @@ moMatrix.brightness(20)
 # GP29 on pico lipo is for battery voltage
 msTemp = font.get("a")
 
-while False:
-    # scrolling display
+# all stations use no decimal place, have trailing zero
+marrPresets = [9310, 9470, 9550, 10030, 10110, 10190, 10710]
+moRDS = tinkeringtech_rda5807m.RDSParser()
+mnVol = 3
+moI2C = board.STEMMA_I2C()
+moRadioI2C = I2CDevice(moI2C, 0x11)
+moRadio = tinkeringtech_rda5807m.Radio(moRadioI2C, moRDS, marrPresets[1], mnVol)
+moRadio.set_band("FM")
+
+while False:    
+    # handle button presses for status changes
+    # use timer for all display updates
     if (time.monotonic() - mnLastPoll) > TIMEOUT:
         lstVal = [int(a) for a in str(mnDispVal)]
         if len(lstVal) == 1:
