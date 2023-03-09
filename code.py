@@ -5,6 +5,7 @@ from ltp305chain import ltp305chain
 import rotaryio
 import busio
 from adafruit_bus_device.i2c_device import I2CDevice
+from adafruit_debouncer import Debouncer
 import tinkeringtech_rda5807m
 
 # timeout is in seconds
@@ -27,16 +28,13 @@ moMatrix0.clear(1)
 
 mpEncodeA = board.GP12
 mpEncodeB = board.GP11
-btnCENTER = digitalio.DigitalInOut(board.GP10)
-btnDOWN = digitalio.DigitalInOut(board.GP9)
-btnRIGHT = digitalio.DigitalInOut(board.GP8)
-btnUP = digitalio.DigitalInOut(board.GP7)
-btnLEFT = digitalio.DigitalInOut(board.GP6)
-btnUP.switch_to_input(digitalio.Pull.UP)
-btnCENTER.switch_to_input(digitalio.Pull.UP)
-btnDOWN.switch_to_input(digitalio.Pull.UP)
-btnRIGHT.switch_to_input(digitalio.Pull.UP)
-btnLEFT.switch_to_input(digitalio.Pull.UP)
+
+PIN_CENTER = board.GP10
+PIN_DOWN = board.GP9
+PIN_RIGHT = board.GP8
+PIN_UP = board.GP7
+PIN_LEFT = board.GP6
+
 moRotary = rotaryio.IncrementalEncoder(mpEncodeA, mpEncodeB)
 moCurrentRotary = moRotary.position
 moLastRotary = moRotary.position
@@ -59,10 +57,18 @@ moRadio.set_mono(False)
 moRadio.set_bass_boost(False)
 
 # msTestString = "It's Chee Paw Paw time (ft Fidget)!! LOL      "
-msTestString = str(moInitStation)
 mnScrollIndex = 0
-if (int(msTestString) < 10000):
-    msTestString = " " + str((marrPresets[0]))[0:3]
+def ButtonRead(pin):
+    io = digitalio.DigitalInOut(pin)
+    io.direction = digitalio.Direction.INPUT
+    io.pull = digitalio.Pull.UP
+    return lambda: io.value
+    
+btnLEFT = Debouncer(ButtonRead(PIN_LEFT))
+btnRIGHT = Debouncer(ButtonRead(PIN_RIGHT))
+btnUP = Debouncer(ButtonRead(PIN_UP))
+btnDOWN = Debouncer(ButtonRead(PIN_DOWN))
+btnCENTER = Debouncer(ButtonRead(PIN_CENTER))
 
 def ChangeStation(nRawFrequency):
     global moRadio
@@ -130,6 +136,12 @@ while True:
     # 1 process inputs, set mode if necessary
     # 2 check mode
     # update display based on mode
+    btnLEFT.update()
+    btnRIGHT.update()
+    btnUP.update()
+    btnDOWN.update()
+    btnCENTER.update()
+    
     if (moRotary.position != moCurrentRotary):
         moCurrentRotary = moRotary.position
         moLastRotaryTime = time.monotonic()
@@ -142,6 +154,16 @@ while True:
             ChangeStation(mnCurrentStation)
         # convert rotary to station number
         moLastRotary = moCurrentRotary
+    if btnLEFT.rose:
+        print("left hit")
+    if btnRIGHT.rose:
+        print("right hit")
+    if btnUP.rose:
+        print("up hit")
+    if btnDOWN.rose:
+        print("down hit")
+    if btnCENTER.rose:
+        print("center hit")
     if ((time.monotonic() - mnLastPoll) > TIMEOUT):
         # print(str(moRadio.mono))
         # scroll string
@@ -159,9 +181,4 @@ while True:
         # moMatrix0.writeCharPair(cLeftChar, cRightChar, False, True, 0)
         # moMatrix0.update(0)
         # moMatrix0.update(1)
-        if (mnScrollIndex >= (len(msTestString) + 1)):
-            mnScrollIndex = 0
-            # moMatrix0.brightness(48, 0)
-            # moMatrix0.brightness(48, 1)
-            # moMatrix0.brightness(48, 2)
         mnLastPoll = time.monotonic()
