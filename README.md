@@ -12,3 +12,17 @@ added support for decimal point
 <li>rotary encoder for tuning</li>
  </ul>
  NEVER USE ANYTHING MADE BY MIKROE COMPANY.
+<br>
+<br>
+need mode toggle via center button:<br>
+<ul>
+ <li>show current station
+ </li>
+ <li>get rds data, display scrolling on matrices
+ </li>
+ <li>show current battery %
+ </li>
+ </ul>
+ <br> up/down buttons for volume
+ <br> double tap left or right buttons to scan to nearest saved station above/below current one
+ <br>rotary behavior needs refinement - this may need a timeout to throttle input so display can catch up
