@@ -13,7 +13,7 @@ TIMEOUT = 0.2
 ROTARY_TIMEOUT = 1.0
 mnLastPoll = 0
 mnSongPoll = 0
-mnBrightness = 20
+mnBrightness = 10
 mnDispVal = 0
 mbBrightAsc = True
 mbRightDec = True
@@ -39,12 +39,19 @@ moRotary = rotaryio.IncrementalEncoder(mpEncodeA, mpEncodeB)
 moCurrentRotary = moRotary.position
 moLastRotary = moRotary.position
 moLastRotaryTime = 0
+mnDisplayMode = 0
+FREQ_MODE = 0
+RDS_MODE = 1
+VOLUME_MODE = 2
+BATTERY_MODE = 3
+BRIGHTNESS_MODE = 4
 
 # add optional support for tea5767?
 # all stations use no decimal place, have trailing zero
 marrPresets = [9310, 9470, 9550, 10030, 10110, 10190, 10710]
 moInitStation = marrPresets[4]
 mnCurrentStation = moInitStation
+mnCurrStationDisp = mnCurrentStation
 mnLastStation = mnCurrentStation
 mnMinFreq = 8700
 mnMaxFreq = 10800
@@ -63,17 +70,48 @@ def ButtonRead(pin):
     io.direction = digitalio.Direction.INPUT
     io.pull = digitalio.Pull.UP
     return lambda: io.value
-    
+
 btnLEFT = Debouncer(ButtonRead(PIN_LEFT))
 btnRIGHT = Debouncer(ButtonRead(PIN_RIGHT))
 btnUP = Debouncer(ButtonRead(PIN_UP))
 btnDOWN = Debouncer(ButtonRead(PIN_DOWN))
 btnCENTER = Debouncer(ButtonRead(PIN_CENTER))
+mbLRInitClick = True
+mnBtnLRTime = 0
+mnBtnPrevLRTime = 0
+mnBtnUDTime = 0
 
-def ChangeStation(nRawFrequency):
+def SetNextDispMode():
+    global mnDisplayMode
+    nMaxMode = 1
+    if (mnDisplayMode == nMaxMode):
+        mnDisplayMode = 0
+    else:
+        mnDisplayMode += 1
+
+def SetDispMode(nDispMode):
+    global mnDisplayMode
+    mnDisplayMode = nDispMode
+
+def IncrementStationDisp():
+    global mnCurrStationDisp
+    SetDispMode(FREQ_MODE)
+    mnCurrStationDisp += 10
+    ShowStation(mnCurrStationDisp)
+
+def DecrementStationDisp():
+    global mnCurrStationDisp
+    SetDispMode(FREQ_MODE)
+    mnCurrStationDisp -= 10
+    ShowStation(mnCurrStationDisp)
+
+def SetStation(nRawFrequency):
     global moRadio
+    global mnCurrentStation
+    print("station set " + str(nRawFrequency))
     moRadio.set_freq(nRawFrequency)
-    
+    mnCurrentStation = nRawFrequency
+
 def ShowStation(nStation):
     global moMatrix0
     strStationFreq = str(nStation / 10)
@@ -85,7 +123,7 @@ def ShowStation(nStation):
     c1RChar = strStationFreq[1:2]
     c0LChar = strStationFreq[2:3]
     c0RChar = strStationFreq[3:4]
-    moMatrix0.writeCharPair(c1LChar, c1RChar, False, False, 1)    
+    moMatrix0.writeCharPair(c1LChar, c1RChar, False, False, 1)
     moMatrix0.writeCharPair(c0LChar, c0RChar, False, True, 0)
     moMatrix0.update(0)
     moMatrix0.update(1)
@@ -98,12 +136,12 @@ def UpdateDisplayStation():
     global mnMaxFreq
     global mnMinFreq
     # 10 mhz per rotary step
-    distMult = 10    
+    distMult = 10
     if (moCurrentRotary == moLastRotary):
         return
     # print(str(moCurrentRotary) + " " + str(moLastRotary))
     distance = (max(moCurrentRotary, moLastRotary) - min(moCurrentRotary, moLastRotary)) * distMult
-    print(distance)
+    # print(distance)
     # get distance from old to new, convert to display value	
     if (moCurrentRotary > moLastRotary):
         if (mnLastStation + distance > mnMaxFreq):
@@ -132,7 +170,7 @@ def UpdateDisplayStation():
 ShowStation(mnCurrentStation)
 
 while True:
-    # workflow: 
+    # workflow:
     # 1 process inputs, set mode if necessary
     # 2 check mode
     # update display based on mode
@@ -141,29 +179,54 @@ while True:
     btnUP.update()
     btnDOWN.update()
     btnCENTER.update()
-    
+
     if (moRotary.position != moCurrentRotary):
         moCurrentRotary = moRotary.position
         moLastRotaryTime = time.monotonic()
         # print(moCurrentRotary)
         UpdateDisplayStation()
     if ((time.monotonic() - moLastRotaryTime) > ROTARY_TIMEOUT):
-        # update display        
+        # update display
         # UpdateDisplayStation()
         if (moLastRotary != moCurrentRotary):
-            ChangeStation(mnCurrentStation)
+            SetStation(mnCurrStationDisp)
         # convert rotary to station number
         moLastRotary = moCurrentRotary
+    # set station on button timeouts
+    # if current station != displayed station
+    if (mbLRInitClick is False and mnCurrStationDisp != mnCurrentStation and (time.monotonic() - mnBtnLRTime) > ROTARY_TIMEOUT):
+        mbLRInitClick = True
+        SetStation(mnCurrStationDisp)
     if btnLEFT.rose:
         print("left hit")
+        if (mbLRInitClick is True):
+            mnBtnLRTime = time.monotonic()
+            mnBtnPrevLRTime = mnBtnLRTime
+            mbLRInitClick = False
+        else:
+            mnBtnPrevLRTime = mnBtnLRTime
+            mnBtnLRTime = time.monotonic()
+        DecrementStationDisp()        
     if btnRIGHT.rose:
         print("right hit")
+        if (mbLRInitClick is True):
+            mnBtnLRTime = time.monotonic()
+            mnBtnPrevLRTime = mnBtnLRTime
+            mbLRInitClick = False
+        else:
+            mnBtnPrevLRTime = mnBtnLRTime
+            mnBtnLRTime = time.monotonic()
+        IncrementStationDisp()
     if btnUP.rose:
         print("up hit")
+        SetDispMode(VOLUME_MODE)
+        mnBtnUDTime = time.monotonic()
     if btnDOWN.rose:
         print("down hit")
+        SetDispMode(VOLUME_MODE)
+        mnBtnUDTime = time.monotonic()
     if btnCENTER.rose:
-        print("center hit")
+        SetNextDispMode()
     if ((time.monotonic() - mnLastPoll) > TIMEOUT):
         # print(str(moRadio.mono))
         # scroll string
