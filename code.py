@@ -11,6 +11,7 @@ import tinkeringtech_rda5807m
 # timeout is in seconds
 TIMEOUT = 0.2
 ROTARY_TIMEOUT = 1.0
+VOL_TIMEOUT = 3.0
 mnLastPoll = 0
 mnSongPoll = 0
 mnBrightness = 10
@@ -93,17 +94,39 @@ def SetDispMode(nDispMode):
     global mnDisplayMode
     mnDisplayMode = nDispMode
 
-def IncrementStationDisp():
+def UpdateStationDisp(nUpdateDir):
     global mnCurrStationDisp
-    SetDispMode(FREQ_MODE)
-    mnCurrStationDisp += 10
+    global mnDisplayMode
+    if (mnDisplayMode != FREQ_MODE):
+        SetDispMode(FREQ_MODE)
+    mnCurrStationDisp += (10 * nUpdateDir)
     ShowStation(mnCurrStationDisp)
-
-def DecrementStationDisp():
-    global mnCurrStationDisp
-    SetDispMode(FREQ_MODE)
-    mnCurrStationDisp -= 10
-    ShowStation(mnCurrStationDisp)
+    
+def UpdateVolume(nDirection):
+    global moRadio
+    global moMatrix0
+    global mnVol
+    if ((mnVol + nDirection) < 16 and (mnVol + nDirection) > -1):        
+        mnVol += nDirection        
+    strVol = str(mnVol)
+    if (len(strVol) < 2):
+        strVol = " " + strVol
+    if (mnVol < 15 and mnVol > 0): 
+        moMatrix0.writeCharPair("v", " ", False, False, 1)
+        moMatrix0.writeCharPair(strVol[:1], strVol[1:2], False, False, 0)
+        moRadio.set_mute(False)
+        moRadio.set_volume(mnVol)
+    elif (mnVol == 15):
+        moMatrix0.writeCharPair("v", "M", False, False, 1)
+        moMatrix0.writeCharPair("A", "X", False, False, 0)
+        moRadio.set_volume(mnVol)
+    elif (mnVol <= 0):
+        moMatrix0.writeCharPair("m", "u", False, False, 1)
+        moMatrix0.writeCharPair("t", "e", False, False, 0)
+        moRadio.set_mute(True)
+    moMatrix0.update(0)
+    moMatrix0.update(1)
+    
 
 def SetStation(nRawFrequency):
     global moRadio
@@ -194,37 +217,43 @@ while True:
         moLastRotary = moCurrentRotary
     # set station on button timeouts
     # if current station != displayed station
-    if (mbLRInitClick is False and mnCurrStationDisp != mnCurrentStation and (time.monotonic() - mnBtnLRTime) > ROTARY_TIMEOUT):
+    nNow = time.monotonic()
+    if (mbLRInitClick is False and mnCurrStationDisp != mnCurrentStation and (nNow - mnBtnLRTime) > ROTARY_TIMEOUT):
         mbLRInitClick = True
         SetStation(mnCurrStationDisp)
+    if (mnDisplayMode == VOLUME_MODE and nNow - mnBtnUDTime > VOL_TIMEOUT and mnVol > 0):
+        ShowStation(mnCurrentStation)
+        SetDispMode(FREQ_MODE)
     if btnLEFT.rose:
-        print("left hit")
         if (mbLRInitClick is True):
-            mnBtnLRTime = time.monotonic()
+            mnBtnLRTime = nNow
             mnBtnPrevLRTime = mnBtnLRTime
             mbLRInitClick = False
         else:
             mnBtnPrevLRTime = mnBtnLRTime
-            mnBtnLRTime = time.monotonic()
-        DecrementStationDisp()        
+            mnBtnLRTime = nNow
+        UpdateStationDisp(-1)        
     if btnRIGHT.rose:
-        print("right hit")
         if (mbLRInitClick is True):
-            mnBtnLRTime = time.monotonic()
+            mnBtnLRTime = nNow
             mnBtnPrevLRTime = mnBtnLRTime
             mbLRInitClick = False
         else:
             mnBtnPrevLRTime = mnBtnLRTime
-            mnBtnLRTime = time.monotonic()
-        IncrementStationDisp()
+            mnBtnLRTime = nNow
+        UpdateStationDisp(1)
     if btnUP.rose:
         print("up hit")
-        SetDispMode(VOLUME_MODE)
-        mnBtnUDTime = time.monotonic()
+        if (mnDisplayMode != BRIGHTNESS_MODE and mnDisplayMode != VOLUME_MODE):
+            SetDispMode(VOLUME_MODE)
+        mnBtnUDTime = nNow
+        UpdateVolume(1)
     if btnDOWN.rose:
         print("down hit")
-        SetDispMode(VOLUME_MODE)
-        mnBtnUDTime = time.monotonic()
+        if (mnDisplayMode != BRIGHTNESS_MODE and mnDisplayMode != VOLUME_MODE):
+            SetDispMode(VOLUME_MODE)
+        mnBtnUDTime = nNow
+        UpdateVolume(-1)
     if btnCENTER.rose:
         SetNextDispMode()
     if ((time.monotonic() - mnLastPoll) > TIMEOUT):
