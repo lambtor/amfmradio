@@ -9,10 +9,12 @@ from adafruit_debouncer import Debouncer
 import tinkeringtech_rda5807m
 
 # timeout is in seconds
-TIMEOUT = 0.2
+SCROLL_TIMEOUT = 0.2
 ROTARY_TIMEOUT = 1.0
 VOL_TIMEOUT = 3.0
+RDS_TIMEOUT = 20.0
 mnLastPoll = 0
+mnLastRDSPoll = 0
 mnSongPoll = 0
 mnBrightness = 10
 mnDispVal = 0
@@ -21,7 +23,9 @@ mbRightDec = True
 mbLeftDec = False
 # moMatrix = ltp305(sda=board.GP16, scl=board.GP17, i2cAddress=0x61)
 moI2C = busio.I2C(sda=board.GP4, scl=board.GP5, frequency=100000)
-moMatrix0 = ltp305chain(sda=board.GP4, scl=board.GP5, i2cAddress=[0x61, 0x62], i2cDef=moI2C)
+moMatrix0 = ltp305chain(
+    sda=board.GP4, scl=board.GP5, i2cAddress=[0x61, 0x62], i2cDef=moI2C
+)
 moMatrix0.brightness(mnBrightness, 0)
 moMatrix0.brightness(mnBrightness, 1)
 moMatrix0.clear(0)
@@ -59,6 +63,22 @@ mnMaxFreq = 10800
 moRDS = tinkeringtech_rda5807m.RDSParser()
 mnVol = 15
 moRadioI2C = I2CDevice(moI2C, 0x11)
+msActRDSText = "    "
+msRDSText = "no detail available    "
+mbRDSUpdate = False
+
+
+def GetRDSText(sPulledText):
+    global msRDSText
+    global mbRDSUpdate
+    # print("rds callback~")
+    print(msRDSText + "~")
+    if msRDSText != sPulledText:
+        mbRDSUpdate = True
+    msRDSText = sPulledText
+
+
+moRDS.attach_text_callback(GetRDSText)
 moRadio = tinkeringtech_rda5807m.Radio(moRadioI2C, moRDS, moInitStation, mnVol)
 moRadio.set_band("FM")
 moRadio.set_mono(False)
@@ -66,11 +86,14 @@ moRadio.set_bass_boost(False)
 
 # msTestString = "It's Chee Paw Paw time (ft Fidget)!! LOL      "
 mnScrollIndex = 0
+
+
 def ButtonRead(pin):
     io = digitalio.DigitalInOut(pin)
     io.direction = digitalio.Direction.INPUT
     io.pull = digitalio.Pull.UP
     return lambda: io.value
+
 
 btnLEFT = Debouncer(ButtonRead(PIN_LEFT))
 btnRIGHT = Debouncer(ButtonRead(PIN_RIGHT))
@@ -82,51 +105,70 @@ mnBtnLRTime = 0
 mnBtnPrevLRTime = 0
 mnBtnUDTime = 0
 
+
 def SetNextDispMode():
     global mnDisplayMode
+    global moRadio
+    global msActRDSText
+    global msRDSText
+    global mnCurrentStation
+    global moMatrix0
     nMaxMode = 1
-    if (mnDisplayMode == nMaxMode):
+    moMatrix0.writeCharPair(" ", " ", False, False, 1)
+    moMatrix0.writeCharPair(" ", " ", False, True, 0)
+    moMatrix0.update(0)
+    moMatrix0.update(1)
+    if mnDisplayMode == nMaxMode:
         mnDisplayMode = 0
     else:
         mnDisplayMode += 1
+    if mnDisplayMode == RDS_MODE:
+        print("disp: " + str(mnDisplayMode))
+        # moRadio.check_rds()
+        msActRDSText = msRDSText
+    if mnDisplayMode == FREQ_MODE:
+        ShowStation(mnCurrentStation)
+
 
 def SetDispMode(nDispMode):
     global mnDisplayMode
     mnDisplayMode = nDispMode
 
+
 def UpdateStationDisp(nUpdateDir):
     global mnCurrStationDisp
     global mnDisplayMode
-    if (mnDisplayMode != FREQ_MODE):
+    if mnDisplayMode != FREQ_MODE:
         SetDispMode(FREQ_MODE)
-    mnCurrStationDisp += (10 * nUpdateDir)
+    mnCurrStationDisp += 10 * nUpdateDir
     ShowStation(mnCurrStationDisp)
-    
+
+
 def UpdateVolume(nDirection):
     global moRadio
     global moMatrix0
     global mnVol
-    if ((mnVol + nDirection) < 16 and (mnVol + nDirection) > -1):        
-        mnVol += nDirection        
+    if (mnVol + nDirection) < 16 and (mnVol + nDirection) > -1:
+        mnVol += nDirection
     strVol = str(mnVol)
-    if (len(strVol) < 2):
+    if len(strVol) < 2:
         strVol = " " + strVol
-    if (mnVol < 15 and mnVol > 0): 
+    if mnVol < 15 and mnVol > 0:
         moMatrix0.writeCharPair("v", " ", False, False, 1)
         moMatrix0.writeCharPair(strVol[:1], strVol[1:2], False, False, 0)
         moRadio.set_mute(False)
         moRadio.set_volume(mnVol)
-    elif (mnVol == 15):
+    elif mnVol == 15:
         moMatrix0.writeCharPair("v", "M", False, False, 1)
         moMatrix0.writeCharPair("A", "X", False, False, 0)
         moRadio.set_volume(mnVol)
-    elif (mnVol <= 0):
+    elif mnVol <= 0:
         moMatrix0.writeCharPair("m", "u", False, False, 1)
         moMatrix0.writeCharPair("t", "e", False, False, 0)
         moRadio.set_mute(True)
     moMatrix0.update(0)
     moMatrix0.update(1)
-    
+
 
 def SetStation(nRawFrequency):
     global moRadio
@@ -134,12 +176,14 @@ def SetStation(nRawFrequency):
     print("station set " + str(nRawFrequency))
     moRadio.set_freq(nRawFrequency)
     mnCurrentStation = nRawFrequency
+    moRadio.check_rds()
+
 
 def ShowStation(nStation):
     global moMatrix0
     strStationFreq = str(nStation / 10)
     # leading space for stations with only 3 digits
-    if (nStation < 10000):
+    if nStation < 10000:
         strStationFreq = " " + str(nStation)
     # convert station to display value
     c1LChar = strStationFreq[:1]
@@ -151,6 +195,7 @@ def ShowStation(nStation):
     moMatrix0.update(0)
     moMatrix0.update(1)
 
+
 def UpdateDisplayStation():
     global moCurrentRotary
     global moLastRotary
@@ -160,14 +205,16 @@ def UpdateDisplayStation():
     global mnMinFreq
     # 10 mhz per rotary step
     distMult = 10
-    if (moCurrentRotary == moLastRotary):
+    if moCurrentRotary == moLastRotary:
         return
     # print(str(moCurrentRotary) + " " + str(moLastRotary))
-    distance = (max(moCurrentRotary, moLastRotary) - min(moCurrentRotary, moLastRotary)) * distMult
+    distance = (
+        max(moCurrentRotary, moLastRotary) - min(moCurrentRotary, moLastRotary)
+    ) * distMult
     # print(distance)
-    # get distance from old to new, convert to display value	
-    if (moCurrentRotary > moLastRotary):
-        if (mnLastStation + distance > mnMaxFreq):
+    # get distance from old to new, convert to display value
+    if moCurrentRotary > moLastRotary:
+        if mnLastStation + distance > mnMaxFreq:
             mnCurrentStation = mnMaxFreq
             ShowStation(mnCurrentStation)
             mnLastStation = mnCurrentStation
@@ -176,8 +223,8 @@ def UpdateDisplayStation():
             ShowStation(mnCurrentStation)
             mnLastStation = mnCurrentStation
     else:
-        if (moCurrentRotary < moLastRotary):
-            if (mnLastStation + distance < mnMinFreq):
+        if moCurrentRotary < moLastRotary:
+            if mnLastStation + distance < mnMinFreq:
                 mnCurrentStation = mnMinFreq
                 ShowStation(mnCurrentStation)
                 mnLastStation = mnCurrentStation
@@ -190,7 +237,9 @@ def UpdateDisplayStation():
             ShowStation(mnCurrentStation)
             mnLastStation = mnCurrentStation
 
+
 ShowStation(mnCurrentStation)
+SetDispMode(FREQ_MODE)
 
 while True:
     # workflow:
@@ -203,38 +252,43 @@ while True:
     btnDOWN.update()
     btnCENTER.update()
 
-    if (moRotary.position != moCurrentRotary):
+    if moRotary.position != moCurrentRotary:
         moCurrentRotary = moRotary.position
         moLastRotaryTime = time.monotonic()
         # print(moCurrentRotary)
         UpdateDisplayStation()
-    if ((time.monotonic() - moLastRotaryTime) > ROTARY_TIMEOUT):
+    if (time.monotonic() - moLastRotaryTime) > ROTARY_TIMEOUT:
         # update display
         # UpdateDisplayStation()
-        if (moLastRotary != moCurrentRotary):
+        if moLastRotary != moCurrentRotary:
             SetStation(mnCurrStationDisp)
         # convert rotary to station number
         moLastRotary = moCurrentRotary
     # set station on button timeouts
     # if current station != displayed station
     nNow = time.monotonic()
-    if (mbLRInitClick is False and mnCurrStationDisp != mnCurrentStation and (nNow - mnBtnLRTime) > ROTARY_TIMEOUT):
+
+    if (
+        mbLRInitClick is False
+        and mnCurrStationDisp != mnCurrentStation
+        and (nNow - mnBtnLRTime) > ROTARY_TIMEOUT
+    ):
         mbLRInitClick = True
         SetStation(mnCurrStationDisp)
-    if (mnDisplayMode == VOLUME_MODE and nNow - mnBtnUDTime > VOL_TIMEOUT and mnVol > 0):
+    if mnDisplayMode == VOLUME_MODE and nNow - mnBtnUDTime > VOL_TIMEOUT and mnVol > 0:
         ShowStation(mnCurrentStation)
         SetDispMode(FREQ_MODE)
     if btnLEFT.rose:
-        if (mbLRInitClick is True):
+        if mbLRInitClick is True:
             mnBtnLRTime = nNow
             mnBtnPrevLRTime = mnBtnLRTime
             mbLRInitClick = False
         else:
             mnBtnPrevLRTime = mnBtnLRTime
             mnBtnLRTime = nNow
-        UpdateStationDisp(-1)        
+        UpdateStationDisp(-1)
     if btnRIGHT.rose:
-        if (mbLRInitClick is True):
+        if mbLRInitClick is True:
             mnBtnLRTime = nNow
             mnBtnPrevLRTime = mnBtnLRTime
             mbLRInitClick = False
@@ -244,33 +298,46 @@ while True:
         UpdateStationDisp(1)
     if btnUP.rose:
         print("up hit")
-        if (mnDisplayMode != BRIGHTNESS_MODE and mnDisplayMode != VOLUME_MODE):
+        if mnDisplayMode != BRIGHTNESS_MODE and mnDisplayMode != VOLUME_MODE:
             SetDispMode(VOLUME_MODE)
         mnBtnUDTime = nNow
         UpdateVolume(1)
     if btnDOWN.rose:
         print("down hit")
-        if (mnDisplayMode != BRIGHTNESS_MODE and mnDisplayMode != VOLUME_MODE):
+        if mnDisplayMode != BRIGHTNESS_MODE and mnDisplayMode != VOLUME_MODE:
             SetDispMode(VOLUME_MODE)
         mnBtnUDTime = nNow
         UpdateVolume(-1)
     if btnCENTER.rose:
         SetNextDispMode()
-    if ((time.monotonic() - mnLastPoll) > TIMEOUT):
-        # print(str(moRadio.mono))
-        # scroll string
-        # moMatrix0.writeSubstring([char1 for char1 in msTestString], mnScrollIndex)
-        # moMatrix0.update(0)
-        # moMatrix0.update(1)
-        # mnScrollIndex += 1
-        # cLeftChar = msTestString[:1]
-        # substring uses start & end indexes. don't use zero as a start, use empty char
-        # cRightChar = msTestString[1:2]
-        # print(cLeftChar + " | " + cRightChar)
-        # moMatrix0.writeCharPair(cLeftChar, cRightChar, False, False, 1)
-        # cLeftChar = msTestString[2:3]
-        # cRightChar = msTestString[3:4]
-        # moMatrix0.writeCharPair(cLeftChar, cRightChar, False, True, 0)
-        # moMatrix0.update(0)
-        # moMatrix0.update(1)
-        mnLastPoll = time.monotonic()
+    # RDS MODE, scroll RDS data line
+    if mnDisplayMode == RDS_MODE:
+        if (nNow - mnLastPoll) > SCROLL_TIMEOUT:
+            # print("idx:" + str(mnScrollIndex))
+            bRefreshDispString = False
+            # scroll string
+            if len(msActRDSText) >= 8:
+                # print(msActRDSText + "|")
+                moMatrix0.writeSubstring([char1 for char1 in msActRDSText], mnScrollIndex)
+                moMatrix0.update(0)
+                moMatrix0.update(1)
+            mnScrollIndex += 1
+            if mnScrollIndex >= len(msActRDSText):
+                mnScrollIndex = 0
+                bRefreshDispString = True
+            if (nNow - mnLastRDSPoll) > RDS_TIMEOUT:
+                print("hit rds recheck:" + msRDSText + "|")
+                # refresh RDS data
+                moRadio.check_rds()
+                if bRefreshDispString is True:
+                    # mbRDSUpdate = False
+                    msActRDSText = msRDSText
+                    if len(msActRDSText) < 8:
+                        msActRDSText = msActRDSText + "    "
+                mnLastRDSPoll = nNow
+            mnLastPoll = nNow
+    elif mnDisplayMode == FREQ_MODE:
+        if (nNow - mnLastRDSPoll) > RDS_TIMEOUT:
+            moRadio.check_rds()
+            mnLastRDSPoll = nNow
+            print(msRDSText)
