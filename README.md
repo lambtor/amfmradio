@@ -1,5 +1,5 @@
 # amfmradio
-circuitpython am fm radio with mp3 play from sd storage
+circuitpython am fm radio
 
 ltp305.py library forked from<br>
 https://github.com/gbit-is/LTP305-CircuitPython-class<br>
@@ -24,5 +24,5 @@ need mode toggle via center button:<br>
  </li>
  </ul>
  <br> up/down buttons for volume
- <br> double tap left or right buttons to scan to nearest saved station above/below current one
+ <br> hold left or right buttons for half a second to jump to nearest saved station above/below current one
  <br>rotary behavior needs refinement - this may need a timeout to throttle input so display can catch up
