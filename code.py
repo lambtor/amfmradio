@@ -237,6 +237,22 @@ def UpdateDisplayStation():
             ShowStation(mnCurrentStation)
             mnLastStation = mnCurrentStation
 
+def GetBatteryPercentText():
+    global moVoltPin
+    global mdRawVoltage
+    global EMPTY_BATTERY
+    global FULL_BATTERY
+    sBattPct = ""
+    # otherwise use value * (9.9 / 65535)
+    mdRawVoltage = (moVoltPin.value / 65535 * moVoltPin.reference_voltage)
+    nBattPct = 100 * ((mdRawVoltage - EMPTY_BATTERY) / (FULL_BATTERY - EMPTY_BATTERY))
+    nBattPct = int(max(min(nBattPct, 100), 0))
+    sBattPct = str(nBattPct) + "%"
+    if (nBattPct < 10):
+        sBattPct = "  " + sBattPct
+    elif (nBattPct < 100):
+        sBattPct = " " + sBattPct
+    return sBattPct
 
 ShowStation(mnCurrentStation)
 SetDispMode(FREQ_MODE)
@@ -341,3 +357,14 @@ while True:
             moRadio.check_rds()
             mnLastRDSPoll = nNow
             print(msRDSText)
+    elif mnDisplayMode == BATTERY_MODE:
+        if mbBattUpdate is True or (nNow - mnLastBattPoll) > BATTERY_TIMEOUT or mnLastBattPoll == 0:
+            mnLastBattPoll = nNow
+            # only poll every 5 min, 300 sec
+            sBatteryTxt = GetBatteryPercentText()
+            if (len(sBatteryTxt) == 4):
+                moMatrix0.writeCharPair(sBatteryTxt[:1], sBatteryTxt[1:2], False, False, 1)
+                moMatrix0.writeCharPair(sBatteryTxt[2:3], sBatteryTxt[3:4], False, True, 0)
+                moMatrix0.update(0)
+                moMatrix0.update(1)
+        print("battery")
