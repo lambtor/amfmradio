@@ -4,15 +4,24 @@ import digitalio
 from ltp305chain import ltp305chain
 import rotaryio
 import busio
+import analogio
 from adafruit_bus_device.i2c_device import I2CDevice
 from adafruit_debouncer import Debouncer
 import tinkeringtech_rda5807m
 
 # timeout is in seconds
-SCROLL_TIMEOUT = 0.2
+SCROLL_TIMEOUT = 0.75
 ROTARY_TIMEOUT = 1.0
 VOL_TIMEOUT = 3.0
-RDS_TIMEOUT = 20.0
+RDS_TIMEOUT = 10.0
+EMPTY_BATTERY = 2.8
+FULL_BATTERY = 4.2
+BATTERY_TIMEOUT = 300
+BRIGHT_TIMEOUT = 10
+mnLastBrightPoll = 0
+mbBattUpdate = False
+mbBrightUpdate = False
+mnLastBattPoll = 0
 mnLastPoll = 0
 mnLastRDSPoll = 0
 mnSongPoll = 0
@@ -39,6 +48,17 @@ PIN_DOWN = board.GP9
 PIN_RIGHT = board.GP8
 PIN_UP = board.GP7
 PIN_LEFT = board.GP6
+# GP 28 used for battery monitoring, despite pimoroni page saying it's 29?
+###
+'A0', 'A1', 'A2', 'A3', 'BAT_SENSE', 'GP0', 'GP1', 'GP10',
+'GP11', 'GP12', 'GP13', 'GP14', 'GP15', 
+'GP16', 'GP17', 'GP18', 'GP19', 'GP2', 'GP20', 
+'GP21', 'GP22', 'GP25', 'GP26', 'GP26_A0', 
+'GP27', 'GP27_A1', 'GP28', 'GP28_A2', 'GP3', 'GP4', 
+'GP5', 'GP6', 'GP7', 'GP8', 'GP9', 
+'I2C', 'LED', 'SCL', 'SDA', 'STEMMA_I2C', 'USER_SW', 'VBUS_DETECT'
+###
+moVoltPin = analogio.AnalogIn(board.GP28_A2)
 
 moRotary = rotaryio.IncrementalEncoder(mpEncodeA, mpEncodeB)
 moCurrentRotary = moRotary.position
@@ -64,7 +84,7 @@ moRDS = tinkeringtech_rda5807m.RDSParser()
 mnVol = 15
 moRadioI2C = I2CDevice(moI2C, 0x11)
 msActRDSText = "    "
-msRDSText = "no detail available    "
+msRDSText = "no detail available     "
 mbRDSUpdate = False
 
 
@@ -72,10 +92,10 @@ def GetRDSText(sPulledText):
     global msRDSText
     global mbRDSUpdate
     # print("rds callback~")
-    print(msRDSText + "~")
-    if msRDSText != sPulledText:
+    print(msRDSText + "~ " + str(time.monotonic()))
+    if msRDSText != (sPulledText.strip() + "    "):
         mbRDSUpdate = True
-    msRDSText = sPulledText
+    msRDSText = sPulledText.strip() + "    "
 
 
 moRDS.attach_text_callback(GetRDSText)
@@ -83,10 +103,11 @@ moRadio = tinkeringtech_rda5807m.Radio(moRadioI2C, moRDS, moInitStation, mnVol)
 moRadio.set_band("FM")
 moRadio.set_mono(False)
 moRadio.set_bass_boost(False)
+print("station set " + str(mnCurrentStation) + "|" + str(time.monotonic()))
+# moRadio.check_rds()
 
 # msTestString = "It's Chee Paw Paw time (ft Fidget)!! LOL      "
 mnScrollIndex = 0
-
 
 def ButtonRead(pin):
     io = digitalio.DigitalInOut(pin)
@@ -113,22 +134,28 @@ def SetNextDispMode():
     global msRDSText
     global mnCurrentStation
     global moMatrix0
-    nMaxMode = 1
-    moMatrix0.writeCharPair(" ", " ", False, False, 1)
-    moMatrix0.writeCharPair(" ", " ", False, True, 0)
-    moMatrix0.update(0)
-    moMatrix0.update(1)
+    global mbBattUpdate
+    global mbBrightUpdate
+    nMaxMode = 4
+    mbBattUpdate = True
+    mbBrightUpdate = True
     if mnDisplayMode == nMaxMode:
         mnDisplayMode = 0
     else:
         mnDisplayMode += 1
+    moMatrix0.writeCharPair(" ", " ", False, False, 1)
+    moMatrix0.writeCharPair(" ", " ", False, False, 0)
+    moMatrix0.update(0)
+    moMatrix0.update(1)
     if mnDisplayMode == RDS_MODE:
-        print("disp: " + str(mnDisplayMode))
+        print("dispR: " + str(mnDisplayMode))
         # moRadio.check_rds()
         msActRDSText = msRDSText
-    if mnDisplayMode == FREQ_MODE:
+    elif mnDisplayMode == FREQ_MODE:
         ShowStation(mnCurrentStation)
-
+    else:
+        pass
+    
 
 def SetDispMode(nDispMode):
     global mnDisplayMode
@@ -173,10 +200,13 @@ def UpdateVolume(nDirection):
 def SetStation(nRawFrequency):
     global moRadio
     global mnCurrentStation
+    global mnCurrStationDisp
     print("station set " + str(nRawFrequency))
     moRadio.set_freq(nRawFrequency)
     mnCurrentStation = nRawFrequency
-    moRadio.check_rds()
+    if (mnCurrStationDisp != mnCurrentStation):
+        mnCurrStationDisp = mnCurrentStation
+    # moRadio.check_rds()
 
 
 def ShowStation(nStation):
@@ -244,13 +274,13 @@ def GetBatteryPercentText():
     global FULL_BATTERY
     sBattPct = ""
     # otherwise use value * (9.9 / 65535)
-    mdRawVoltage = (moVoltPin.value / 65535 * moVoltPin.reference_voltage)
+    mdRawVoltage = moVoltPin.value / 65535 * moVoltPin.reference_voltage
     nBattPct = 100 * ((mdRawVoltage - EMPTY_BATTERY) / (FULL_BATTERY - EMPTY_BATTERY))
     nBattPct = int(max(min(nBattPct, 100), 0))
     sBattPct = str(nBattPct) + "%"
-    if (nBattPct < 10):
+    if nBattPct < 10:
         sBattPct = "  " + sBattPct
-    elif (nBattPct < 100):
+    elif nBattPct < 100:
         sBattPct = " " + sBattPct
     return sBattPct
 
@@ -271,6 +301,7 @@ while True:
     if moRotary.position != moCurrentRotary:
         moCurrentRotary = moRotary.position
         moLastRotaryTime = time.monotonic()
+        # need cleanup for rotary conversion to frequency display
         # print(moCurrentRotary)
         UpdateDisplayStation()
     if (time.monotonic() - moLastRotaryTime) > ROTARY_TIMEOUT:
@@ -330,7 +361,6 @@ while True:
     if mnDisplayMode == RDS_MODE:
         if (nNow - mnLastPoll) > SCROLL_TIMEOUT:
             # print("idx:" + str(mnScrollIndex))
-            bRefreshDispString = False
             # scroll string
             if len(msActRDSText) >= 8:
                 # print(msActRDSText + "|")
@@ -342,11 +372,12 @@ while True:
                 mnScrollIndex = 0
                 bRefreshDispString = True
             if (nNow - mnLastRDSPoll) > RDS_TIMEOUT:
-                print("hit rds recheck:" + msRDSText + "|")
-                # refresh RDS data
+                # print("hit rds recheck:" + msRDSText + "|")
+                # refresh RDS data-
                 moRadio.check_rds()
-                if bRefreshDispString is True:
+                if msActRDSText != msRDSText:
                     # mbRDSUpdate = False
+                    print(msActRDSText + "||")
                     msActRDSText = msRDSText
                     if len(msActRDSText) < 8:
                         msActRDSText = msActRDSText + "    "
@@ -356,15 +387,55 @@ while True:
         if (nNow - mnLastRDSPoll) > RDS_TIMEOUT:
             moRadio.check_rds()
             mnLastRDSPoll = nNow
-            print(msRDSText)
+            # print(str(moRadio.rds) + "|")
+            if mbRDSUpdate is True:
+                print(msRDSText + " 2")
+                mbRDSUpdate = False
+            # msActRDSText = msRDSText
+            # print(msRDSText + " 1")
+    elif mnDisplayMode == VOLUME_MODE:
+        if(nNow - mnBtnUDTime > VOL_TIMEOUT):
+            mnBtnUDTime = nNow
+            SetDispMode(VOLUME_MODE)
+            UpdateVolume(0)
+    elif mnDisplayMode == BRIGHTNESS_MODE:
+        if (mbBrightUpdate is True or (nNow - mnLastBrightPoll) > BRIGHT_TIMEOUT):
+            mnLastBrightPoll = nNow
+            moMatrix0.writeCharPair("b", "r", False, False, 1)
+            moMatrix0.writeCharPair(str(mnBrightness)[:1], str(mnBrightness)[1:2], False, False, 0)
+            moMatrix0.update(0)
+            moMatrix0.update(1)
+            mbBrightUpdate = False
+            print("bright")
     elif mnDisplayMode == BATTERY_MODE:
-        if mbBattUpdate is True or (nNow - mnLastBattPoll) > BATTERY_TIMEOUT or mnLastBattPoll == 0:
+        if (
+            mbBattUpdate is True
+            or mnLastBattPoll == 0
+            or (nNow - mnLastBattPoll) > BATTERY_TIMEOUT
+        ):
             mnLastBattPoll = nNow
+            mbBattUpdate = False
             # only poll every 5 min, 300 sec
             sBatteryTxt = GetBatteryPercentText()
-            if (len(sBatteryTxt) == 4):
-                moMatrix0.writeCharPair(sBatteryTxt[:1], sBatteryTxt[1:2], False, False, 1)
-                moMatrix0.writeCharPair(sBatteryTxt[2:3], sBatteryTxt[3:4], False, True, 0)
+            if len(sBatteryTxt) == 4:
+                moMatrix0.writeCharPair(
+                    sBatteryTxt[:1], sBatteryTxt[1:2], False, False, 1
+                )
+                moMatrix0.writeCharPair(
+                    sBatteryTxt[2:3], sBatteryTxt[3:4], False, False, 0
+                )
                 moMatrix0.update(0)
                 moMatrix0.update(1)
-        print("battery")
+            elif len(sBatteryTxt) == 3:
+                moMatrix0.writeCharPair("b", sBatteryTxt[:1], False, False, 1)
+                moMatrix0.writeCharPair(
+                    sBatteryTxt[1:2], sBatteryTxt[2:3], False, False, 0
+                )
+                moMatrix0.update(0)
+                moMatrix0.update(1)
+            elif len(sBatteryTxt) == 2:
+                moMatrix0.writeCharPair("b", " ", False, False, 1)
+                moMatrix0.writeCharPair(sBatteryTxt[:1], sBatteryTxt[1:2], False, False, 0)
+                moMatrix0.update(0)
+                moMatrix0.update(1)
+            print("battery " + str(mnLastBattPoll))
