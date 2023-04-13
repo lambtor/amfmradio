@@ -14,6 +14,7 @@ SCROLL_TIMEOUT = 0.75
 ROTARY_TIMEOUT = 1.0
 VOL_TIMEOUT = 3.0
 RDS_TIMEOUT = 10.0
+RDSWARM_TIMEOUT = 180.0
 EMPTY_BATTERY = 2.8
 FULL_BATTERY = 4.2
 BATTERY_TIMEOUT = 300
@@ -48,17 +49,17 @@ PIN_DOWN = board.GP9
 PIN_RIGHT = board.GP8
 PIN_UP = board.GP7
 PIN_LEFT = board.GP6
-# GP 28 used for battery monitoring, despite pimoroni page saying it's 29?
+# BAT_SENSE used for battery monitoring, despite pimoroni page saying it's 29?
 ###
 'A0', 'A1', 'A2', 'A3', 'BAT_SENSE', 'GP0', 'GP1', 'GP10',
-'GP11', 'GP12', 'GP13', 'GP14', 'GP15', 
-'GP16', 'GP17', 'GP18', 'GP19', 'GP2', 'GP20', 
-'GP21', 'GP22', 'GP25', 'GP26', 'GP26_A0', 
-'GP27', 'GP27_A1', 'GP28', 'GP28_A2', 'GP3', 'GP4', 
-'GP5', 'GP6', 'GP7', 'GP8', 'GP9', 
+'GP11', 'GP12', 'GP13', 'GP14', 'GP15',
+'GP16', 'GP17', 'GP18', 'GP19', 'GP2', 'GP20',
+'GP21', 'GP22', 'GP25', 'GP26', 'GP26_A0',
+'GP27', 'GP27_A1', 'GP28', 'GP28_A2', 'GP3', 'GP4',
+'GP5', 'GP6', 'GP7', 'GP8', 'GP9',
 'I2C', 'LED', 'SCL', 'SDA', 'STEMMA_I2C', 'USER_SW', 'VBUS_DETECT'
 ###
-moVoltPin = analogio.AnalogIn(board.GP28_A2)
+moVoltPin = analogio.AnalogIn(board.BAT_SENSE)
 
 moRotary = rotaryio.IncrementalEncoder(mpEncodeA, mpEncodeB)
 moCurrentRotary = moRotary.position
@@ -81,12 +82,12 @@ mnLastStation = mnCurrentStation
 mnMinFreq = 8700
 mnMaxFreq = 10800
 moRDS = tinkeringtech_rda5807m.RDSParser()
-mnVol = 15
+mnVol = 10
 moRadioI2C = I2CDevice(moI2C, 0x11)
 msActRDSText = "    "
 msRDSText = "no detail available     "
 mbRDSUpdate = False
-
+mbRDSWarmedup = False
 
 def GetRDSText(sPulledText):
     global msRDSText
@@ -125,7 +126,7 @@ mbLRInitClick = True
 mnBtnLRTime = 0
 mnBtnPrevLRTime = 0
 mnBtnUDTime = 0
-
+mnInitTime = 0
 
 def SetNextDispMode():
     global mnDisplayMode
@@ -155,7 +156,7 @@ def SetNextDispMode():
         ShowStation(mnCurrentStation)
     else:
         pass
-    
+
 
 def SetDispMode(nDispMode):
     global mnDisplayMode
@@ -273,19 +274,22 @@ def GetBatteryPercentText():
     global EMPTY_BATTERY
     global FULL_BATTERY
     sBattPct = ""
-    # otherwise use value * (9.9 / 65535)
-    mdRawVoltage = moVoltPin.value / 65535 * moVoltPin.reference_voltage
+    # otherwise use value * (9.9 / 65535). pin.reference_voltage not giving decent value
+    mdRawVoltage = (moVoltPin.value * 9.9) / 65535
+    # print("[" + str(mdRawVoltage))
     nBattPct = 100 * ((mdRawVoltage - EMPTY_BATTERY) / (FULL_BATTERY - EMPTY_BATTERY))
     nBattPct = int(max(min(nBattPct, 100), 0))
     sBattPct = str(nBattPct) + "%"
+    # use á as battery icon 
     if nBattPct < 10:
-        sBattPct = "  " + sBattPct
+        sBattPct = "á " + sBattPct
     elif nBattPct < 100:
-        sBattPct = " " + sBattPct
+        sBattPct = "á" + sBattPct
     return sBattPct
 
 ShowStation(mnCurrentStation)
 SetDispMode(FREQ_MODE)
+mnInitTime = time.monotonic()
 
 while True:
     # workflow:
@@ -314,6 +318,9 @@ while True:
     # set station on button timeouts
     # if current station != displayed station
     nNow = time.monotonic()
+    if (mbRDSWarmedup is False and (nNow - mnInitTime) > RDSWARM_TIMEOUT):
+        print("rds warmed")
+        mbRDSWarmedup = True
 
     if (
         mbLRInitClick is False
@@ -371,7 +378,7 @@ while True:
             if mnScrollIndex >= len(msActRDSText):
                 mnScrollIndex = 0
                 bRefreshDispString = True
-            if (nNow - mnLastRDSPoll) > RDS_TIMEOUT:
+            if mbRDSWarmedup is True and (nNow - mnLastRDSPoll) > RDS_TIMEOUT:
                 # print("hit rds recheck:" + msRDSText + "|")
                 # refresh RDS data-
                 moRadio.check_rds()
@@ -394,7 +401,7 @@ while True:
             # msActRDSText = msRDSText
             # print(msRDSText + " 1")
     elif mnDisplayMode == VOLUME_MODE:
-        if(nNow - mnBtnUDTime > VOL_TIMEOUT):
+        if (nNow - mnBtnUDTime > VOL_TIMEOUT):
             mnBtnUDTime = nNow
             SetDispMode(VOLUME_MODE)
             UpdateVolume(0)
