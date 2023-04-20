@@ -19,6 +19,8 @@ EMPTY_BATTERY = 2.8
 FULL_BATTERY = 4.2
 BATTERY_TIMEOUT = 300
 BRIGHT_TIMEOUT = 10
+MIN_BRIGHTNESS = 2
+MAX_BRIGHTNESS = 50
 mnLastBrightPoll = 0
 mbBattUpdate = False
 mbBrightUpdate = False
@@ -51,13 +53,13 @@ PIN_UP = board.GP7
 PIN_LEFT = board.GP6
 # BAT_SENSE used for battery monitoring, despite pimoroni page saying it's 29?
 ###
-'A0', 'A1', 'A2', 'A3', 'BAT_SENSE', 'GP0', 'GP1', 'GP10',
-'GP11', 'GP12', 'GP13', 'GP14', 'GP15',
-'GP16', 'GP17', 'GP18', 'GP19', 'GP2', 'GP20',
-'GP21', 'GP22', 'GP25', 'GP26', 'GP26_A0',
-'GP27', 'GP27_A1', 'GP28', 'GP28_A2', 'GP3', 'GP4',
-'GP5', 'GP6', 'GP7', 'GP8', 'GP9',
-'I2C', 'LED', 'SCL', 'SDA', 'STEMMA_I2C', 'USER_SW', 'VBUS_DETECT'
+"A0", "A1", "A2", "A3", "BAT_SENSE", "GP0", "GP1", "GP10",
+"GP11", "GP12", "GP13", "GP14", "GP15",
+"GP16", "GP17", "GP18", "GP19", "GP2", "GP20",
+"GP21", "GP22", "GP25", "GP26", "GP26_A0",
+"GP27", "GP27_A1", "GP28", "GP28_A2", "GP3", "GP4",
+"GP5", "GP6", "GP7", "GP8", "GP9",
+"I2C", "LED", "SCL", "SDA", "STEMMA_I2C", "USER_SW", "VBUS_DETECT"
 ###
 moVoltPin = analogio.AnalogIn(board.BAT_SENSE)
 
@@ -89,6 +91,7 @@ msRDSText = "no detail available     "
 mbRDSUpdate = False
 mbRDSWarmedup = False
 
+
 def GetRDSText(sPulledText):
     global msRDSText
     global mbRDSUpdate
@@ -110,6 +113,7 @@ print("station set " + str(mnCurrentStation) + "|" + str(time.monotonic()))
 # msTestString = "It's Chee Paw Paw time (ft Fidget)!! LOL      "
 mnScrollIndex = 0
 
+
 def ButtonRead(pin):
     io = digitalio.DigitalInOut(pin)
     io.direction = digitalio.Direction.INPUT
@@ -127,6 +131,7 @@ mnBtnLRTime = 0
 mnBtnPrevLRTime = 0
 mnBtnUDTime = 0
 mnInitTime = 0
+
 
 def SetNextDispMode():
     global mnDisplayMode
@@ -182,12 +187,12 @@ def UpdateVolume(nDirection):
     if len(strVol) < 2:
         strVol = " " + strVol
     if mnVol < 15 and mnVol > 0:
-        moMatrix0.writeCharPair("v", " ", False, False, 1)
+        moMatrix0.writeCharPair("γ", " ", False, False, 1)
         moMatrix0.writeCharPair(strVol[:1], strVol[1:2], False, False, 0)
         moRadio.set_mute(False)
         moRadio.set_volume(mnVol)
     elif mnVol == 15:
-        moMatrix0.writeCharPair("v", "M", False, False, 1)
+        moMatrix0.writeCharPair("γ", "M", False, False, 1)
         moMatrix0.writeCharPair("A", "X", False, False, 0)
         moRadio.set_volume(mnVol)
     elif mnVol <= 0:
@@ -202,12 +207,12 @@ def SetStation(nRawFrequency):
     global moRadio
     global mnCurrentStation
     global mnCurrStationDisp
-    print("station set " + str(nRawFrequency))
+    # print("station set " + str(nRawFrequency))
     moRadio.set_freq(nRawFrequency)
     mnCurrentStation = nRawFrequency
-    if (mnCurrStationDisp != mnCurrentStation):
+    if mnCurrStationDisp != mnCurrentStation:
         mnCurrStationDisp = mnCurrentStation
-    # moRadio.check_rds()
+    moRadio.check_rds()
 
 
 def ShowStation(nStation):
@@ -280,12 +285,37 @@ def GetBatteryPercentText():
     nBattPct = 100 * ((mdRawVoltage - EMPTY_BATTERY) / (FULL_BATTERY - EMPTY_BATTERY))
     nBattPct = int(max(min(nBattPct, 100), 0))
     sBattPct = str(nBattPct) + "%"
-    # use á as battery icon 
+    # use á as battery icon
     if nBattPct < 10:
-        sBattPct = "á " + sBattPct
+        sBattPct = "α " + sBattPct
     elif nBattPct < 100:
-        sBattPct = "á" + sBattPct
+        sBattPct = "α" + sBattPct
     return sBattPct
+
+def UpdateBrightness(nDirection):
+    global moMatrix0
+    global mnBrightness
+    if (
+        (mnBrightness + nDirection) < MAX_BRIGHTNESS
+        and (mnBrightness + nDirection) > MIN_BRIGHTNESS
+    ):
+        mnBrightness += nDirection
+    strBr = str(mnBrightness)
+    if len(strBr) < 2:
+        strBr = " " + strBr
+    if mnVol < MAX_BRIGHTNESS and mnVol > MIN_BRIGHTNESS:
+        moMatrix0.writeCharPair("β", " ", False, False, 1)
+        moMatrix0.writeCharPair(strBr[:1], strBr[1:2], False, False, 0)
+    elif mnVol == MAX_BRIGHTNESS:
+        moMatrix0.writeCharPair("β", "M", False, False, 1)
+        moMatrix0.writeCharPair("A", "X", False, False, 0)
+    elif mnVol <= MIN_BRIGHTNESS:
+        moMatrix0.writeCharPair("β", "m", False, False, 1)
+        moMatrix0.writeCharPair("i", "n", False, False, 0)
+    moMatrix0.brightness(mnBrightness, 0)
+    moMatrix0.brightness(mnBrightness, 1)
+    moMatrix0.update(0)
+    moMatrix0.update(1)
 
 ShowStation(mnCurrentStation)
 SetDispMode(FREQ_MODE)
@@ -318,10 +348,9 @@ while True:
     # set station on button timeouts
     # if current station != displayed station
     nNow = time.monotonic()
-    if (mbRDSWarmedup is False and (nNow - mnInitTime) > RDSWARM_TIMEOUT):
+    if mbRDSWarmedup is False and (nNow - mnInitTime) > RDSWARM_TIMEOUT:
         print("rds warmed")
         mbRDSWarmedup = True
-
     if (
         mbLRInitClick is False
         and mnCurrStationDisp != mnCurrentStation
@@ -352,16 +381,26 @@ while True:
         UpdateStationDisp(1)
     if btnUP.rose:
         print("up hit")
-        if mnDisplayMode != BRIGHTNESS_MODE and mnDisplayMode != VOLUME_MODE:
+        # up button only changes volume if not in brightness mode
+        # otherwise up / down changes brightness
+        if mnDisplayMode == BRIGHTNESS_MODE:
+            pass
+        elif mnDisplayMode != VOLUME_MODE:
             SetDispMode(VOLUME_MODE)
+            UpdateVolume(1)
+        elif mnDisplayMode == VOLUME_MODE:
+            UpdateVolume(1)
         mnBtnUDTime = nNow
-        UpdateVolume(1)
     if btnDOWN.rose:
         print("down hit")
-        if mnDisplayMode != BRIGHTNESS_MODE and mnDisplayMode != VOLUME_MODE:
+        if mnDisplayMode == BRIGHTNESS_MODE:
+            pass
+        elif mnDisplayMode != VOLUME_MODE:
             SetDispMode(VOLUME_MODE)
+            UpdateVolume(-1)
+        elif mnDisplayMode == VOLUME_MODE:
+            UpdateVolume(-1)
         mnBtnUDTime = nNow
-        UpdateVolume(-1)
     if btnCENTER.rose:
         SetNextDispMode()
     # RDS MODE, scroll RDS data line
@@ -371,7 +410,9 @@ while True:
             # scroll string
             if len(msActRDSText) >= 8:
                 # print(msActRDSText + "|")
-                moMatrix0.writeSubstring([char1 for char1 in msActRDSText], mnScrollIndex)
+                moMatrix0.writeSubstring(
+                    [char1 for char1 in msActRDSText], mnScrollIndex
+                )
                 moMatrix0.update(0)
                 moMatrix0.update(1)
             mnScrollIndex += 1
@@ -401,19 +442,16 @@ while True:
             # msActRDSText = msRDSText
             # print(msRDSText + " 1")
     elif mnDisplayMode == VOLUME_MODE:
-        if (nNow - mnBtnUDTime > VOL_TIMEOUT):
+        if nNow - mnBtnUDTime > VOL_TIMEOUT:
             mnBtnUDTime = nNow
             SetDispMode(VOLUME_MODE)
             UpdateVolume(0)
     elif mnDisplayMode == BRIGHTNESS_MODE:
-        if (mbBrightUpdate is True or (nNow - mnLastBrightPoll) > BRIGHT_TIMEOUT):
+        if mbBrightUpdate is True or (nNow - mnLastBrightPoll) > BRIGHT_TIMEOUT:
             mnLastBrightPoll = nNow
-            moMatrix0.writeCharPair("b", "r", False, False, 1)
-            moMatrix0.writeCharPair(str(mnBrightness)[:1], str(mnBrightness)[1:2], False, False, 0)
-            moMatrix0.update(0)
-            moMatrix0.update(1)
+            UpdateBrightness(0)
             mbBrightUpdate = False
-            print("bright")
+            # print("bright")
     elif mnDisplayMode == BATTERY_MODE:
         if (
             mbBattUpdate is True
@@ -434,15 +472,17 @@ while True:
                 moMatrix0.update(0)
                 moMatrix0.update(1)
             elif len(sBatteryTxt) == 3:
-                moMatrix0.writeCharPair("b", sBatteryTxt[:1], False, False, 1)
+                moMatrix0.writeCharPair("α", sBatteryTxt[:1], False, False, 1)
                 moMatrix0.writeCharPair(
                     sBatteryTxt[1:2], sBatteryTxt[2:3], False, False, 0
                 )
                 moMatrix0.update(0)
                 moMatrix0.update(1)
             elif len(sBatteryTxt) == 2:
-                moMatrix0.writeCharPair("b", " ", False, False, 1)
-                moMatrix0.writeCharPair(sBatteryTxt[:1], sBatteryTxt[1:2], False, False, 0)
+                moMatrix0.writeCharPair("α", " ", False, False, 1)
+                moMatrix0.writeCharPair(
+                    sBatteryTxt[:1], sBatteryTxt[1:2], False, False, 0
+                )
                 moMatrix0.update(0)
                 moMatrix0.update(1)
-            print("battery " + str(mnLastBattPoll))
+            # print("battery " + str(mnLastBattPoll))
