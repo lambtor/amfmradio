@@ -87,17 +87,22 @@ fontDictionary = {
     "=": [0, 0, 14, 0, 14, 0, 0],
     "/": [2, 2, 4, 4, 4, 8, 8],
     "|": [6, 6, 6, 6, 6, 6, 6],
-    "\"": [10, 10, 0, 0, 0, 0, 0],
+    '"': [10, 10, 0, 0, 0, 0, 0],
     "~": [0, 0, 24, 4, 3, 0, 0],
     "`": [8, 4, 0, 0, 0, 0, 0],
     "[": [0, 0, 0, 0, 0, 0, 0],
     "]": [0, 0, 0, 0, 0, 0, 0],
     "<": [0, 0, 0, 0, 0, 0, 0],
     ">": [0, 0, 0, 0, 0, 0, 0],
-    # "á": [14, 27, 17, 17, 17, 17, 31]
-    # "á": [0, 4, 14, 10, 10, 14, 0]
-    # "á": [0, 0, 4, 14, 10, 10, 14]
-    "á": [0, 0, 12, 30, 18, 18, 30]
+    # "α": [14, 27, 17, 17, 17, 17, 31]
+    # "α": [0, 4, 14, 10, 10, 14, 0]
+    # "α": [0, 0, 4, 14, 10, 10, 14]
+    # battery
+    "α": [0, 0, 12, 30, 18, 18, 30],
+    # brightness
+    "β": [14, 17, 17, 17, 10, 10, 4],
+    # volume
+    "γ": [14, 17, 4, 0, 31, 17, 14]
 }
 
 # Somewhat based on: https://github.com/pimoroni/ltp305-python
@@ -128,31 +133,35 @@ class ltp305chain:
         return chars[char]
 
     def getChar2(self, char):
+        # print(str(fontDictionary[char]))
+        # set default character to blank space
+        # in case RDS returns non-unicode / chars undefined
         return fontDictionary.get(char, [0, 0, 0, 0, 0, 0, 0])
 
-    def __init__(self, sda=board.GP4, scl=board.GP5, i2cAddress=[0x61, 0x62], i2cDef=None):
-        if (i2cDef is None):
-            self.i2c = busio.I2C(sda, scl, frequency=100000)
+    def __init__(
+        self, sda=board.GP4, scl=board.GP5, i2cAddress=[0x61, 0x62], i2cDef=None
+    ):
+        if i2cDef is None:
+            self.i2c = busio.I2C(sda=board.GP4, scl=board.GP5, frequency=100000)
         else:
             self.i2c = i2cDef
         self.i2cAddress1 = i2cAddress[0]
         # intAddress2 = 0
-        if (len(i2cAddress) > 1):
+        if len(i2cAddress) > 1:
             self.i2cAddress2 = i2cAddress[1]
             # intAddress2 = int(i2cAddress[1])
-        # self.i2cAddress2 = i2cAddress[1]
-        if (len(i2cAddress) > 2):
+        if len(i2cAddress) > 2:
             self.i2cAddress3 = i2cAddress[2]
             # intAddress3 = int(i2cAddress[2])
-
         self.i2cAddresses = i2cAddress
         """
+        # 20230316 removed i2c locking to encourage playing well with others
         if not self.i2c.try_lock():
             m = "Unable to get i2c lock"
             print(m)
         i2cScan = self.i2c.scan()
         intAddress1 = int(i2cAddress[0])
-        # intAddress2 = int(i2cAddress[1])
+        intAddress2 = int(i2cAddress[1])
 
         if intAddress1 not in i2cScan:
             m = "unable to find ltp305 " + str(i2cAddress[0])
@@ -161,19 +170,18 @@ class ltp305chain:
             m = "unable to find ltp305 #2" + str(intAddress2)
             print(m)
         # if intAddress3 not in i2cScan:
-           # m = "unable to find ltp305 #3" + str(i2cAddress[2])
-           # print(m)
+            # m = "unable to find ltp305 #3" + str(i2cAddress[2])
+            # print(m)
         """
+        # initialize matrices in chain
         self.commands()
-        self.i2c.try_lock()
         self.sendCommand(self.CMD_MODE, self.MODE, 0)
         self.sendCommand(self.CMD_OPTIONS, self.OPTS, 0)
         self.sendCommand(self.CMD_MODE, self.MODE, 1)
         self.sendCommand(self.CMD_OPTIONS, self.OPTS, 1)
-        if (len(i2cAddress) > 2):
+        if len(i2cAddress) > 2:
             self.sendCommand(self.CMD_MODE, self.MODE, 2)
             self.sendCommand(self.CMD_OPTIONS, self.OPTS, 2)
-        self.i2c.unlock()
 
     def binary(self, num, pre="0b", length=5, spacer=0):
         return "{0}{{:{1}>{2}}}".format(pre, spacer, length).format(bin(num)[2:])
@@ -183,11 +191,12 @@ class ltp305chain:
         bytearr = bytearray(2)
         bytearr[0] = addr
         bytearr[1] = frame
-        self.i2c.try_lock()
+        # 20230316 removed i2c locking to encourage playing well with others
+        # self.i2c.try_lock()
         # self.i2c.writeto(self.i2cAddress, bytearr)
         self.i2c.writeto(self.i2cAddresses[dispIndex], bytearr)
         # self.i2c.writeto(tempAddresses[dispIndex], bytearr)
-        self.i2c.unlock()
+        # self.i2c.unlock()
 
     def update(self, dispIndex=0):
         self.sendCommand(self.CMD_UPDATE, 0x01, dispIndex)
@@ -229,7 +238,7 @@ class ltp305chain:
             self.sendCommand(row, map[c], dispIndex)
             c += 1
         # on left side, send row as 21, with full definition as if number must be binary 128
-        if (bDecimal is True):
+        if bDecimal is True:
             self.sendCommand(21, 0b01000000, dispIndex)
         else:
             self.sendCommand(21, 0b00000000, dispIndex)
@@ -250,11 +259,11 @@ class ltp305chain:
             # temp2 = temp
             # print(temp2)
             temp = int(temp)
-            if (col == 7):
+            if col == 7:
                 # decimal must be treated as if there are 3 extra columns
                 # on right matrix. on left it's 3 extra rows
                 # leftmost column if we add 3 is 128 in binary
-                if (bDecimal is True):
+                if bDecimal is True:
                     temp += 128
                     # print(temp)
             self.sendCommand(col, temp, dispIndex)
@@ -274,48 +283,49 @@ class ltp305chain:
         # print(char)
         self.write(disp, map, bDecimal, dispIndex)
 
-    def writeCharPair(self, lChar, rChar, bDecimalL=False, bDecimalR=False, dispIndex=0):
+    def writeCharPair(
+        self, lChar, rChar, bDecimalL=False, bDecimalR=False, dispIndex=0
+    ):
         self.writeChar("l", lChar, bDecimalL, dispIndex)
         self.writeChar("r", rChar, bDecimalR, dispIndex)
 
     # display subset of a string on a matrix pair
     def writeSubstring(self, arrText, scrollIndex):
-        if (scrollIndex <= 1):
+        if scrollIndex <= 1:
             self.writeChar("r", arrText[scrollIndex], False, 0)
-            if (scrollIndex == 0):
+            if scrollIndex == 0:
                 self.writeChar("l", " ", False, 0)
             else:
                 self.writeChar("l", arrText[scrollIndex - 1], False, 0)
             # print(str(scrollIndex) + " t1 " + str(arrText[scrollIndex]))
-        elif (scrollIndex <= 3):
+        elif scrollIndex <= 3:
             self.writeChar("r", arrText[scrollIndex], False, 0)
             self.writeChar("l", arrText[scrollIndex - 1], False, 0)
             self.writeChar("r", arrText[scrollIndex - 2], False, 1)
-            if (scrollIndex == 2):
+            if scrollIndex == 2:
                 self.writeChar("l", " ", False, 1)
             else:
                 self.writeChar("l", arrText[scrollIndex - 3], False, 1)
             # print(str(scrollIndex) + " t3 " + str(arrText[scrollIndex]))
-        elif (scrollIndex <= 5):
+        elif scrollIndex <= 5:
             self.writeChar("l", arrText[scrollIndex - 3], False, 1)
             self.writeChar("r", arrText[scrollIndex - 2], False, 1)
             self.writeChar("l", arrText[scrollIndex - 1], False, 0)
             self.writeChar("r", arrText[scrollIndex], False, 0)
-            if (len(self.i2cAddresses) > 2):
+            if len(self.i2cAddresses) > 2:
                 self.writeChar("r", arrText[scrollIndex - 4], False, 2)
-                if (scrollIndex == 4):
+                if scrollIndex == 4:
                     self.writeChar("l", " ", False, 2)
                 else:
                     self.writeChar("l", arrText[scrollIndex - 5], False, 2)
             # print(str(scrollIndex) + " t5 " + str(arrText[scrollIndex]))
-        elif (scrollIndex < (len(arrText))):
+        elif scrollIndex < (len(arrText)):
             self.writeChar("r", arrText[scrollIndex], False, 0)
             self.writeChar("l", arrText[scrollIndex - 1], False, 0)
             self.writeChar("r", arrText[scrollIndex - 2], False, 1)
             self.writeChar("l", arrText[scrollIndex - 3], False, 1)
-            if (len(self.i2cAddresses) > 2):
+            if len(self.i2cAddresses) > 2:
                 self.writeChar("r", arrText[scrollIndex - 4], False, 2)
                 self.writeChar("l", arrText[scrollIndex - 5], False, 2)
             # print(str(scrollIndex) + " t6 " + str(arrText[scrollIndex]))
         pass
-
