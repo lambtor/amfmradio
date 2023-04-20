@@ -296,20 +296,20 @@ def UpdateBrightness(nDirection):
     global moMatrix0
     global mnBrightness
     if (
-        (mnBrightness + nDirection) < MAX_BRIGHTNESS
+        (mnBrightness + nDirection) < MAX_BRIGHTNESS 
         and (mnBrightness + nDirection) > MIN_BRIGHTNESS
     ):
         mnBrightness += nDirection
     strBr = str(mnBrightness)
     if len(strBr) < 2:
         strBr = " " + strBr
-    if mnVol < MAX_BRIGHTNESS and mnVol > MIN_BRIGHTNESS:
+    if mnBrightness < MAX_BRIGHTNESS and mnBrightness > MIN_BRIGHTNESS:
         moMatrix0.writeCharPair("β", " ", False, False, 1)
         moMatrix0.writeCharPair(strBr[:1], strBr[1:2], False, False, 0)
-    elif mnVol == MAX_BRIGHTNESS:
+    elif mnBrightness == MAX_BRIGHTNESS:
         moMatrix0.writeCharPair("β", "M", False, False, 1)
         moMatrix0.writeCharPair("A", "X", False, False, 0)
-    elif mnVol <= MIN_BRIGHTNESS:
+    elif mnBrightness <= MIN_BRIGHTNESS:
         moMatrix0.writeCharPair("β", "m", False, False, 1)
         moMatrix0.writeCharPair("i", "n", False, False, 0)
     moMatrix0.brightness(mnBrightness, 0)
