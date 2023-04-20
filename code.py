@@ -296,7 +296,7 @@ def UpdateBrightness(nDirection):
     global moMatrix0
     global mnBrightness
     if (
-        (mnBrightness + nDirection) < MAX_BRIGHTNESS 
+        (mnBrightness + nDirection) < MAX_BRIGHTNESS
         and (mnBrightness + nDirection) > MIN_BRIGHTNESS
     ):
         mnBrightness += nDirection
@@ -384,7 +384,7 @@ while True:
         # up button only changes volume if not in brightness mode
         # otherwise up / down changes brightness
         if mnDisplayMode == BRIGHTNESS_MODE:
-            pass
+            UpdateBrightness(1)
         elif mnDisplayMode != VOLUME_MODE:
             SetDispMode(VOLUME_MODE)
             UpdateVolume(1)
@@ -394,7 +394,7 @@ while True:
     if btnDOWN.rose:
         print("down hit")
         if mnDisplayMode == BRIGHTNESS_MODE:
-            pass
+            UpdateBrightness(-1)
         elif mnDisplayMode != VOLUME_MODE:
             SetDispMode(VOLUME_MODE)
             UpdateVolume(-1)
