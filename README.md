@@ -14,13 +14,15 @@ added support for decimal point
  NEVER USE ANYTHING MADE BY MIKROE COMPANY.
 <br>
 <br>
-need mode toggle via center button:<br>
+mode toggle via center button:<br>
 <ul>
  <li>show current station
  </li>
  <li>get rds data, display scrolling on matrices
  </li>
  <li>show current battery %
+ </li>
+  <li>show current display brightness
  </li>
  </ul>
  <br> up/down buttons for volume
